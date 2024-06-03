@@ -1,0 +1,166 @@
+---
+
+################################################################################
+# Configure APT
+################################################################################
+
+  - name: Ensure network connectivity within chroot
+    copy:
+      src: /etc/resolv.conf
+      dest: "{{ working_directory }}/mnt/etc/resolv.conf"
+
+  - name: Remove default trusted APT repositories
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'rm -f /etc/apt/sources.list.d/ubuntu.sources'
+
+  - name: Add trusted APT repositories
+    copy:
+      dest: "{{ working_directory }}/mnt/etc/apt/sources.list"
+      content: |
+        deb http://archive.ubuntu.com/ubuntu {{ os_version_name }} restricted main universe multiverse
+        deb http://archive.ubuntu.com/ubuntu {{ os_version_name }}-security restricted main universe multiverse 
+        deb http://archive.ubuntu.com/ubuntu {{ os_version_name }}-updates restricted main universe multiverse
+        deb http://archive.ubuntu.com/ubuntu {{ os_version_name }}-proposed restricted main universe multiverse
+        deb http://archive.ubuntu.com/ubuntu {{ os_version_name }}-backports restricted main universe multiverse
+
+  - name: Update APT package index
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get update -qy'
+    register: apt_update_result
+    failed_when: apt_update_result.rc != 0
+
+  - name: Install APT-related utilities
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -qy apt-utils software-properties-common'
+
+################################################################################
+# Configure networking
+################################################################################
+
+  - name: Install networking packages
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'apt-get install -qy tzdata netplan.io net-tools nmap iputils-ping ethtool network-manager'
+
+  - name: Configure netplan (Ethernet only)
+    when: wifi_ssid is undefined or not wifi_ssid
+    copy:
+      dest: "{{ working_directory }}/mnt/etc/netplan/01-network-manager-all.yaml"
+      content:  |
+        network:
+          version: 2
+          renderer: NetworkManager
+          ethernets:
+            {{ target_eth_name }}:
+              dhcp4: true
+              dhcp6: false
+
+  - name: Configure netplan (Ethernet and WiFi)
+    when: wifi_ssid is defined and wifi_ssid
+    copy:
+      dest: "{{ working_directory }}/mnt/etc/netplan/01-network-manager-all.yaml"
+      content:  |
+        network:
+          version: 2
+          renderer: NetworkManager
+          ethernets:
+            {{ target_eth_name }}:
+              dhcp4: true
+              dhcp6: false
+          wifis:
+            {{ target_wifi_name }}:
+              dhcp4: true
+              dhcp6: false
+              access-points:
+                "{{ wifi_ssid }}":
+                  password: "{{ wifi_password }}"
+
+  - name: Configure NetworkManager
+    file:
+      path: "{{ working_directory }}/mnt/etc/NetworkManager/conf.d/10-globally-managed-devices.conf"
+      mode: 0644
+      state: touch
+
+  - name: Disable IPv6
+    copy:
+      dest: "{{ working_directory }}/mnt/etc/sysctl.d/60-custom.conf"
+      content: |
+        net.ipv6.conf.all.disable_ipv6 = 1
+        net.ipv6.conf.default.disable_ipv6 = 1
+        net.ipv6.conf.lo.disable_ipv6 = 1
+    register: sysctl_ipv6
+
+  - name: Apply sysctl changes
+    when: sysctl_ipv6.changed
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'sysctl --system'
+
+  - name: Ensure IPv6 is still disabled after reboot
+    copy:
+      dest: "{{ working_directory }}/mnt/etc/rc.local"
+      content: |
+        #!/bin/bash
+        sysctl -p /etc/sysctl.d/60-custom.conf
+        exit 0
+
+  - name: Ensure permissions are correct for /etc/rc.local
+    file:
+      path: "{{ working_directory }}/mnt/etc/rc.local"
+      mode: 0755
+
+################################################################################
+# Add localhost entry to hosts file
+################################################################################
+
+  - name: Add localhost entry to hosts file
+    copy:
+      dest: "{{ working_directory }}/mnt/etc/hosts"
+      content:  127.0.0.1 localhost
+
+################################################################################
+# Install kernel/headers and firmware/drivers
+################################################################################
+
+  - name: Install the kernel and headers
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive LC_CTYPE=C LC_ALL=C apt-get -qy install linux-headers-{{ kernel_version }} linux-image-{{ kernel_version }}'
+
+  - name: Install linux firmware
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -qy install linux-firmware'
+
+  - name: Ensure /lib/firmware directory exists
+    file:
+      path: "{{ working_directory }}/mnt/lib/firmware"
+      state: directory
+      mode: 0755
+
+  - name: Copy all *.ucode firmware files to /lib/firmware
+    copy:
+      src: "{{ item }}"
+      dest: "{{ working_directory }}/mnt/lib/firmware/"
+    with_fileglob:
+      - "{{ playbook_dir }}/../input/*.ucode"
+
+################################################################################
+# Install storage device utilities
+################################################################################
+
+  - name: Install parted/e2fsprogs/pigz
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -qy install parted e2fsprogs pigz'
+
+################################################################################
+# Install and configure systemd
+################################################################################
+
+  - name: Install systemd
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -qy install systemd'
+
+  - name: Configure systemd
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'systemctl set-default multi-user.target'
+
+################################################################################
+# Install and configure NTP
+################################################################################
+
+  - name: Install NTP
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -qy install ntp'
+
+  - name: Configure NTP
+    copy:
+      dest: "{{ working_directory }}/mnt/etc/ntp.conf"
+      content:  |
+        server {{ ntp_server }}
+        driftfile /etc/ntp/drift

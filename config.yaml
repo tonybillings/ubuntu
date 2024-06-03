@@ -1,0 +1,82 @@
+---
+
+################################################################################
+# Required parameters
+################################################################################
+
+# The directory that will contain files needed to complete the
+# provisioning process.  It will be deleted upon successful completion.
+working_directory: /tmp/.ubuntu_provisioner
+
+# The hostname of the USB provisioner / target system.
+provisioner_hostname: provisioner
+target_hostname: tonys-laptop
+
+# The name of the storage device on the target system.
+target_storage_device_name: nvme0n1
+
+# Maximum size of the ISO image, in megabytes, before compression.
+# The actual size will be based on the amount of data written to
+# the virtual disk used to create the image, but that amount will not
+# exceed the value specified here.
+max_image_size_mb: 10000
+
+# Size of the root partition, specified as a percentage of the available
+# free space remaining on the storage device after the boot partition is
+# created. Example: for a USB thumb drive with a storage capacity of 32
+# gigabytes, setting this parameter to 50 would result in 16 GB being
+# used for the root partition and would leave 16 GB of unused/unpartitioned
+# space on the drive.
+provisioner_root_size_pct: 50
+target_root_size_pct: 100
+
+# Ubuntu Base version to use.
+os_version_number: 24.04
+os_version_name: noble
+
+# Linux version to use.
+kernel_version: 6.8.0-31-lowlatency
+
+# Ethernet/WiFi interface names on the target system.
+target_eth_name: enp88s0
+target_wifi_name: wlp69s0
+
+# NTP time-server to use.
+ntp_server: time.nist.gov
+
+################################################################################
+# Optional parameters (can be omitted from this file)
+################################################################################
+
+# Set to true to have UFW installed/enabled with the
+# default policy (block all inbound traffic, except
+# ICMP; allow all outbound traffic).
+enable_firewall: true
+
+# Set to true to have OpenSSH Server installed/enabled
+# and TCP port 22 opened for inbound traffic (if UFW
+# is enabled).
+enable_ssh_server: true
+
+# Set to true to have GNOME/GDM installed and the boot
+# target set to graphical.
+enable_gui: true
+
+# Set to 'full' to install "ubuntu-gnome-desktop" (comes
+# with extra software), otherwise "ubuntu-desktop-minimal"
+# will be installed.  This parameter has no effect if
+# enable_gui is not defined or has been set to false.
+gui_edition: full
+
+# If set, will install the specified packages via APT.
+additional_packages: >
+  vim nano wget curl zip unzip parted dosfstools rsyslog rfkill
+  iw htop tree ssh-askpass procps git build-essential
+  cmake bluetooth bluez bluez-tools libbluetooth-dev libhdf5-dev
+  libgl1-mesa-dev libglfw3-dev libfreetype6-dev
+
+# If set, will install the specified version of Go.
+golang_version: 1.22.3
+
+# If set, a copy of the image will be saved here.
+save_iso_copy_to: /tmp

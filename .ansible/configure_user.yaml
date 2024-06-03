@@ -1,0 +1,81 @@
+---
+
+################################################################################
+# Install sudo
+################################################################################
+
+  - name: Install sudo
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'apt-get -qy install sudo'
+
+################################################################################
+# Add user
+################################################################################
+
+  - name: Add user account
+    shell: |
+      chroot "{{ working_directory }}/mnt" /bin/bash -c '
+      useradd -m -s /bin/bash {{ login_username }} &&
+      echo {{ login_username }}:{{ login_password }} | chpasswd -m &&
+      chsh -s /bin/bash {{ login_username }} || exit 1'
+
+  - name: Add user to groups 'adm' and 'sudo'
+    shell: |
+      chroot "{{ working_directory }}/mnt" /bin/bash -c '
+      adduser {{ login_username }} adm &&
+      adduser {{ login_username }} sudo || exit 1'
+
+################################################################################
+# Configure user home directory
+################################################################################
+
+  - name: Create ~/bin directory
+    file:
+      path: "{{ working_directory }}/mnt/home/{{ login_username }}/bin"
+      state: directory
+      mode: 0750
+
+  - name: Create ~/.ssh directory
+    file:
+      path: "{{ working_directory }}/mnt/home/{{ login_username }}/.ssh"
+      state: directory
+      mode: 0700
+
+  - name: Register the stats for the public SSH key, if provided
+    stat:
+      path: "{{ playbook_dir }}/{{ login_username }}_key.pub"
+    register: public_ssh_key
+
+  - name: Copy the public SSH key used for remote access, if provided
+    when: public_ssh_key.stat is defined and public_ssh_key.stat.exists
+    copy:
+      src: "{{ playbook_dir }}/{{ login_username }}_key.pub"
+      dest: "{{ working_directory }}/mnt/home/{{ login_username }}/.ssh/authorized_keys"
+      mode: 0600
+
+  - name: Register the stats for the .bashrc file in /prov
+    stat:
+      path: "{{ playbook_dir }}/.bashrc"
+    register: bashrc_file_prov
+
+  - name: Copy the .bashrc file from /prov if present
+    when: bashrc_file_prov.stat is defined and bashrc_file_prov.stat.exists
+    copy:
+      src: "{{ playbook_dir }}/.bashrc"
+      dest: "{{ working_directory }}/mnt/home/{{ login_username }}/.bashrc"
+      mode: 0600
+
+  - name: Register the stats for the .bashrc file in input directory
+    when: bashrc_file_prov.stat is not defined or not bashrc_file_prov.stat.exists
+    stat:
+      path: "{{ playbook_dir }}/../input/.bashrc"
+    register: bashrc_file_input
+
+  - name: Copy the .bashrc file from input directory if present
+    when: bashrc_file_input.stat is defined and bashrc_file_input.stat.exists
+    copy:
+      src: "{{ playbook_dir }}/../input/.bashrc"
+      dest: "{{ working_directory }}/mnt/home/{{ login_username }}/.bashrc"
+      mode: 0600
+
+  - name: Ensure everything in the home directory has the correct ownership
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'chown -R {{ login_username }}:{{ login_username }} /home/{{ login_username }}'

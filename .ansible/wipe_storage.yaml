@@ -1,0 +1,16 @@
+---
+
+################################################################################
+# Delete all partitions/data on the storage device
+################################################################################
+
+  - name: Register storage device information
+    community.general.parted: "device=/dev/{{ storage_device_name }} unit=MiB"
+    register: storage_device_info
+
+  - name: Remove all partitions
+    community.general.parted:
+      device: "/dev/{{ storage_device_name }}"
+      number: "{{ item.num }}"
+      state: absent
+    loop: "{{ storage_device_info.partitions }}"

@@ -1,0 +1,87 @@
+---
+
+################################################################################
+# Provision the target system
+################################################################################
+
+- name: Provision the target system
+  hosts: localhost
+  gather_facts: no
+  become: true
+
+  vars_files:
+    - config.yaml
+    - secrets.yaml
+
+  tasks:
+
+    - block:
+
+################################################################################
+# Configure environment
+################################################################################
+
+        - name: Configure the working directory
+          include_tasks: configure_work_dir.yaml
+
+################################################################################
+# Configure the storage device
+################################################################################
+
+        - name: Wipe all data/partitions from the storage device
+          include_tasks: wipe_storage.yaml
+          vars:
+            storage_device_name: "{{ target_storage_device_name }}"
+
+################################################################################
+# Provision the target system
+################################################################################
+
+        - name: Extract the image to the target system
+          shell: |
+            pigz -d -c "{{ playbook_dir }}/ubuntu-base.iso.gz" | dd bs=16M conv=fsync oflag=direct of=/dev/{{ target_storage_device_name }}
+
+        - name: Resize the target system
+          include_tasks: resize_storage.yaml
+          vars:
+            storage_device_name: "{{ target_storage_device_name }}"
+            root_size_pct: "{{ target_root_size_pct }}"
+
+################################################################################
+# Configure the target system
+################################################################################
+
+        - name: Mount the target system
+          include_tasks: mount_device.yaml
+          vars:
+            device_name: "{{ target_storage_device_name }}"
+
+        - name: Configure the target system
+          include_tasks: configure_target.yaml
+          vars:
+            new_hostname: "{{ target_hostname }}"
+            login_username: "{{ target_login_username }}"
+            login_password: "{{ target_login_password }}"
+
+################################################################################
+# Unmount the storage device
+################################################################################
+
+      always:
+
+        - name: Unmount the storage device
+          include_tasks: unmount_device.yaml
+
+################################################################################
+# Cleanup
+################################################################################
+
+    - include_tasks: delete_work_dir.yaml
+
+################################################################################
+# Display final message
+################################################################################
+
+    - name: "##### PROVISIONING COMPLETED! ####"
+      debug:
+        msg: "POWER OFF THE COMPUTER AND THEN UNPLUG THE USB DRIVE BEFORE POWERING BACK ON! You can shutdown with the command 'shutdown now' or press the power button."

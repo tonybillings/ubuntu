@@ -1,0 +1,10 @@
+---
+
+################################################################################
+# Change the hostname of the device
+################################################################################
+
+  - name: Update /etc/hostname with the new hostname
+    copy:
+      dest: "{{ working_directory }}/mnt/etc/hostname"
+      content: "{{ new_hostname }}"

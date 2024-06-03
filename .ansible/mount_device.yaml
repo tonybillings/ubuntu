@@ -1,0 +1,72 @@
+---
+
+################################################################################
+# Ensure mount points exist for the boot/root partitions
+################################################################################
+
+  - name: Create the directory for mounting the root partition
+    become: false
+    file:
+      path: "{{ working_directory }}/mnt"
+      state: directory
+      mode: 0774
+
+  - name: Create the directory for mounting the boot partition
+    become: false
+    file:
+      path: "{{ working_directory }}/mnt/boot/efi"
+      state: directory
+      mode: 0774
+
+################################################################################
+# Mount the boot and root partitions of the device
+################################################################################
+
+  - name: Mount the root partition
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt"
+      src: "/dev/{{ device_name }}{{ partition_prefix | default('p') }}2"
+      fstype: ext4
+      opts: rw
+      state: mounted
+      boot: no
+
+  - name: Mount the boot partition
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt/boot/efi"
+      src: "/dev/{{ device_name }}{{ partition_prefix | default('p') }}1"
+      fstype: vfat
+      opts: rw
+      state: mounted
+      boot: no
+
+################################################################################
+# Create the needed bind mounts so some actions after chroot'ing can work
+################################################################################
+
+  - name: Create bind mount for /dev
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt/dev"
+      src: /dev
+      fstype: none
+      opts: bind
+      state: mounted
+      boot: no
+
+  - name: Create bind mount for /proc
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt/proc"
+      src: /proc
+      fstype: none
+      opts: bind
+      state: mounted
+      boot: no
+
+  - name: Create bind mount for /sys
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt/sys"
+      src: /sys
+      fstype: none
+      opts: bind
+      state: mounted
+      boot: no

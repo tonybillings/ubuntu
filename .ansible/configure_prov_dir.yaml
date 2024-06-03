@@ -1,0 +1,82 @@
+---
+
+################################################################################
+# Configure the provisioning folder
+################################################################################
+
+  - name: Create /prov, which will contain files used to provision target system
+    file:
+      path: "{{ working_directory }}/mnt/prov"
+      state: directory
+      mode: 0770
+
+  - name: Add the playbooks used to configure the target system
+    copy:
+      src: "{{ playbook_dir }}/"
+      dest: "{{ working_directory }}/mnt/prov"
+
+  - name: Add the config file
+    copy:
+      src: "{{ playbook_dir }}/../config.yaml"
+      dest: "{{ working_directory }}/mnt/prov"
+
+  - name: Add the secrets file
+    copy:
+      src: "{{ playbook_dir }}/../secrets.yaml"
+      dest: "{{ working_directory }}/mnt/prov"
+
+  - name: Check if .bashrc file exists
+    stat:
+      path: "{{ playbook_dir }}/../input/.bashrc"
+    register: bashrc_file
+
+  - name: Copy the .bashrc file (if present)
+    when: bashrc_file.stat is defined and bashrc_file.stat.exists
+    copy:
+      src: "{{ playbook_dir }}/../input/.bashrc"
+      dest: "{{ working_directory }}/mnt/prov"
+
+  - name: Check if public SSH key exists in the input folder
+    stat:
+      path: "{{ playbook_dir }}/../input/{{ target_login_username }}_key.pub"
+    register: public_ssh_key
+
+  - name: Copy the public SSH key (if present)
+    when: public_ssh_key.stat is defined and public_ssh_key.stat.exists
+    copy:
+      remote_src: yes
+      src: "{{ playbook_dir }}/../input/{{ target_login_username }}_key.pub"
+      dest: "{{ working_directory }}/mnt/prov"
+
+  - name: Create wrapper script for the target system provisioning playbook
+    copy:
+      dest: "{{ working_directory }}/mnt/prov/run_playbook.sh"
+      content:  |
+        #!/bin/bash
+        cd /prov
+        printf "Ensuring Ansible dependencies are installed...\n"
+        ansible-galaxy collection install community.general 1> /dev/null || echo "Ansible dependencies could not be installed!" || return
+        printf "Ansible dependencies are installed.\n\n"             
+        export ANSIBLE_LOCALHOST_WARNING=false
+        printf "When asked for the BECOME password, just enter the one used to log in!\n\n"
+        ansible-playbook -K -i .inventory.yaml $1
+        cd -
+
+  - name: Create wrapper script (provision_pc) for the provisioning playbook
+    copy:
+      dest: "{{ working_directory }}/mnt/home/{{ login_username }}/bin/provision_pc"
+      mode: 0700
+      content:  |
+        #!/bin/bash
+        cd /prov
+        /prov/run_playbook.sh provision_pc.yaml
+        cd -
+
+  - name: Change ownership of the provision_pc script
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'chown {{ login_username }}:{{ login_username }} /home/{{ login_username }}/bin/provision_pc'
+
+  - name: Change owner of provisioning folder
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'chown -R {{ login_username }}:{{ login_username }} /prov'
+
+  - name: Change permissions for provisioning folder items
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'chmod -R 770 /prov'

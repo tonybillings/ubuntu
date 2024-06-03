@@ -1,0 +1,42 @@
+---
+
+################################################################################
+# Configure firewall
+################################################################################
+
+  - when: enable_firewall is defined and enable_firewall
+    block:
+      - name: Install UFW
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'apt-get -qy install ufw'
+
+      - name: Ensure UFW is enabled on boot
+        lineinfile:
+          path: "{{ working_directory }}/mnt/etc/ufw/ufw.conf"
+          regexp: '^ENABLED='
+          line: 'ENABLED=yes'
+          state: present
+
+      - name: Disable IPv6 for UFW
+        lineinfile:
+          path: "{{ working_directory }}/mnt/etc/default/ufw"
+          state: present
+          regexp: '^IPV6\=yes'
+          line: 'IPV6=no'
+
+      - name: Add SSH/TCP inbound rule to UFW after.rules
+        when: enable_ssh_server is defined and enable_ssh_server
+        lineinfile:
+          path: "{{ working_directory }}/mnt/etc/ufw/after.rules"
+          insertbefore: "^COMMIT"
+          line: '-A ufw-before-input -p tcp --dport 22 -j ACCEPT'
+          create: yes
+
+################################################################################
+# Additional security measures
+################################################################################
+
+  - name: Disable password-based authentication over SSH
+    when: enable_ssh_server is defined and enable_ssh_server
+    lineinfile:
+      path: "{{ working_directory }}/mnt/etc/ssh/sshd_config"
+      line: PasswordAuthentication no

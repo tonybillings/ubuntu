@@ -1,0 +1,27 @@
+---
+
+################################################################################
+# Cleanup
+################################################################################
+
+  - name: Delete the /prov folder
+    file:
+      path: "{{ working_directory }}/mnt/prov"
+      state: absent
+
+################################################################################
+# Configure the user account
+################################################################################
+
+  - name: Create the user account
+    include_tasks: configure_user.yaml
+
+  - name: Delete the provisioning user account
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'userdel -r {{ provisioner_login_username }}'
+
+################################################################################
+# Configure the hostname
+################################################################################
+
+  - name: Set the hostname
+    include_tasks: configure_hostname.yaml

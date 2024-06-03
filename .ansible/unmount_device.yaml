@@ -1,0 +1,51 @@
+---
+
+################################################################################
+# Unmount the bind mounts
+################################################################################
+
+  - name: Unmount the /sys bind mount
+    ignore_errors: yes
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt/sys"
+      state: unmounted
+
+  - name: Unmount the /proc bind mount
+    ignore_errors: yes
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt/proc"
+      state: unmounted
+
+  - name: Unmount the /dev bind mount
+    ignore_errors: yes
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt/dev"
+      state: unmounted
+
+################################################################################
+# Unmount the boot and root partitions
+################################################################################
+
+  - name: Unmount the boot partition
+    ignore_errors: yes
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt/boot/efi"
+      state: unmounted
+
+  - name: Unmount the root partition
+    ignore_errors: yes
+    ansible.posix.mount:
+      path: "{{ working_directory }}/mnt"
+      state: unmounted
+
+  - name: Ensure /etc/fstab is clean
+    lineinfile:
+      path: /etc/fstab
+      state: absent
+      regexp: '\/tmp\/\.create_provisioner'
+
+  - name: Ensure /etc/fstab is clean
+    lineinfile:
+      path: /etc/fstab
+      state: absent
+      regexp: '\/tmp\/\.provision_pc'

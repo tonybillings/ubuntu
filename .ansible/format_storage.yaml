@@ -1,0 +1,33 @@
+---
+
+################################################################################
+# Format the storage device
+################################################################################
+
+  - name: Create the boot partition on the storage device
+    community.general.parted:
+      device: "/dev/{{ storage_device_name }}"
+      number: 1
+      state: present
+      flags: [ boot, esp ]
+      part_type: primary
+      part_start: 1MiB
+      part_end: 250MiB
+
+  - name: Register storage device information (again)
+    community.general.parted: "device=/dev/{{ storage_device_name }} unit=MiB"
+    register: storage_device_info
+
+  - name: Create the root partition on the storage device
+    community.general.parted:
+      device: "/dev/{{ storage_device_name }}"
+      number: 2
+      state: present
+      part_type: primary
+      part_start: "{{ storage_device_info.partitions[0].end }}MiB"
+
+  - name: Format the boot partition on the storage device
+    command: mkfs.fat -F32 /dev/{{ storage_device_name }}p1
+
+  - name: Format the root partition on the storage device
+    command: mkfs.ext4 -F /dev/{{ storage_device_name }}p2

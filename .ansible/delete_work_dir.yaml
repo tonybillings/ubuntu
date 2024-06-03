@@ -1,0 +1,10 @@
+---
+
+################################################################################
+# Delete the working directory
+################################################################################
+
+  - name: "Delete the working directory ({{ working_directory }})"
+    file:
+      path: "{{ working_directory }}"
+      state: absent

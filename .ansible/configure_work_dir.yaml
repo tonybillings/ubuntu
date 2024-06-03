@@ -1,0 +1,17 @@
+---
+
+################################################################################
+# Configure working directory
+################################################################################
+
+  - name: "Delete the working directory ({{ working_directory }})"
+    file:
+      path: "{{ working_directory }}"
+      state: absent
+
+  - name: "Create the working directory ({{ working_directory }})"
+    become: false
+    file:
+      path: "{{ working_directory }}"
+      state: directory
+      mode: 0774

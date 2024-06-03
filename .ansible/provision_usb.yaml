@@ -1,0 +1,246 @@
+---
+
+################################################################################
+# Create Ubuntu Base Provisioner
+################################################################################
+
+- name: Create Ubuntu Base Provisioner
+  hosts: localhost
+  gather_facts: no
+  become: true
+
+  vars_files:
+    - ../config.yaml
+    - ../secrets.yaml
+
+  vars_prompt:
+    - name: usb_device_name
+      prompt: "Enter the device name for your USB device (example: sda)"
+      private: no
+
+  tasks:
+
+################################################################################
+# Validation
+################################################################################
+
+    - name: Validate the playbook's configuration
+      include_tasks: validate_config.yaml
+
+################################################################################
+# Configure environment
+################################################################################
+
+    - name: Unmount the USB device if already mounted
+      include_tasks: unmount_device.yaml
+
+    - name: Configure the working directory
+      include_tasks: configure_work_dir.yaml
+
+################################################################################
+# Create the virtual disk used to contain the boot/root partitions
+################################################################################
+
+    - name: Create the virtual disk
+      block:
+        - name: Create the blockfile to be used as the virtual disk
+          community.general.filesize:
+            path: "{{ working_directory }}/vdisk"
+            size: "{{ max_image_size_mb }}MiB"
+            blocksize: 1MiB
+            source: /dev/zero
+            mode: 0770
+            owner: "{{ lookup('env','USER') }}"
+            group: "{{ lookup('env','USER') }}"
+
+        - name: Get next loop device name
+          command: losetup -f
+          register: get_next_loop_device_name_result
+
+        - name: Set loop_device_name variable
+          set_fact:
+            loop_device_name: "{{ get_next_loop_device_name_result.stdout_lines[0][5:] }}"
+
+        - name: Create loop device '/dev/{{ loop_device_name }}' for the virtual disk
+          command: losetup /dev/{{ loop_device_name }} "{{ working_directory }}/vdisk"
+
+################################################################################
+# Configure the storage device
+################################################################################
+
+        - name: Configure the storage device
+          include_tasks: configure_image_storage.yaml
+          vars:
+            storage_device_name: "{{ loop_device_name }}"
+
+################################################################################
+# Mount the virtual disk
+################################################################################
+
+        - name: Mount the virtual disk
+          include_tasks: mount_device.yaml
+          vars:
+            device_name: "{{ loop_device_name }}"
+
+################################################################################
+# Get/extract Ubuntu Base image
+################################################################################
+
+        - name: Download Ubuntu Base image
+          become: false
+          get_url:
+            url: "http://cdimage.ubuntu.com/ubuntu-base/releases/{{ os_version_number }}/release/ubuntu-base-{{ os_version_number }}-base-amd64.tar.gz"
+            dest: "{{ working_directory }}/ubuntu-base.tar.gz"
+            mode: 0774
+
+        - name: Extract Ubuntu Base image
+          unarchive:
+            src: "{{ working_directory }}/ubuntu-base.tar.gz"
+            dest: "{{ working_directory }}/mnt"
+
+################################################################################
+# Generate an SSH keypair if one was not provided
+################################################################################
+
+        - name: Register the stats for the public SSH key, if provided
+          stat:
+            path: "{{ playbook_dir }}/../input/{{ target_login_username }}_key.pub"
+          register: public_ssh_key
+
+        - name: Generate an SSH keypair for {{ target_login_username }}
+          when: public_ssh_key.stat is not defined or not public_ssh_key.stat.exists
+          openssh_keypair:
+            path: "{{ playbook_dir }}/../input/{{ target_login_username }}_key"
+            type: rsa
+            size: 4096
+            mode: 0600
+
+################################################################################
+# Configure the image
+################################################################################
+
+        - name: Configure the image
+          include_tasks: configure_image.yaml
+          vars:
+            device_name: "{{ loop_device_name }}"
+            new_hostname: "{{ provisioner_hostname }}"
+            login_username: "{{ provisioner_login_username }}"
+            login_password: "{{ provisioner_login_password }}"
+
+        - name: Configure the provisioner directory
+          include_tasks: configure_prov_dir.yaml
+          vars:
+            login_username: "{{ provisioner_login_username }}"
+
+################################################################################
+# Unmount the virtual disk and detach the loop device
+################################################################################
+
+      always:
+
+        - name: Unmount the virtual disk
+          include_tasks: unmount_device.yaml
+
+        - name: Detach loop device
+          ignore_errors: yes
+          command: losetup -d "/dev/{{ loop_device_name }}"
+
+################################################################################
+# Create the ISO
+################################################################################
+
+    - name: Convert the provisioner image to ISO format
+      become: false
+      command: dd bs=16M conv=fsync oflag=direct if="{{ working_directory }}/vdisk" of="{{ working_directory }}/ubuntu-base.iso"
+
+    - name: Compress the ISO using pigz
+      become: false
+      command: pigz -9 "{{ working_directory }}/ubuntu-base.iso"
+
+    - name: Delete the virtual disk file
+      file:
+        path: "{{ working_directory }}/vdisk"
+        state: absent
+
+################################################################################
+# Provision the USB device
+################################################################################
+
+    - name: Register USB device information
+      community.general.parted: "device=/dev/{{ usb_device_name }} unit=MiB"
+      register: usb_device_info
+
+    - name: Attempt to unmount the USB device, by partition
+      ignore_errors: true
+      shell: umount -f -q -A /dev/{{ usb_device_name }}{{ item.num }} | echo
+      with_items: "{{ usb_device_info.partitions }}"
+
+    - name: Ensure the USB device is unmounted
+      ignore_errors: true
+      shell: umount -f -q -A /dev/{{ usb_device_name }} | echo
+
+    - name: Remove all partitions from the USB device (will fail if unmounting failed, the device is in use, etc)
+      include_tasks: wipe_storage.yaml
+      vars:
+        storage_device_name: "{{ usb_device_name }}"
+
+    - name: Extract the image to the USB device
+      shell: | 
+        pigz -d -c "{{ working_directory }}/ubuntu-base.iso.gz" | dd bs=16M conv=fsync oflag=direct of=/dev/{{ usb_device_name }}
+
+    - name: Resize the USB device
+      include_tasks: resize_storage.yaml
+      vars:
+        storage_device_name: "{{ usb_device_name }}"
+        root_size_pct: "{{ provisioner_root_size_pct }}"
+        partition_prefix: ""
+
+################################################################################
+# Copy the compressed ISO to /prov
+################################################################################
+
+    - block:
+        - name: Mount the USB provisioner
+          include_tasks: mount_device.yaml
+          vars:
+            device_name: "{{ usb_device_name }}"
+            partition_prefix: ""
+
+        - name: Copy the ISO to the /prov folder
+          copy:
+            src: "{{ working_directory }}/ubuntu-base.iso.gz"
+            dest: "{{ working_directory }}/mnt/prov/ubuntu-base.iso.gz"
+
+      always:
+
+        - name: Unmount the USB provisioner
+          include_tasks: unmount_device.yaml
+
+################################################################################
+# Cleanup
+################################################################################
+
+    - name: Save a copy of the ISO before deleting the working directory
+      when: save_iso_copy_to is defined and save_iso_copy_to | trim != ''
+      command: mv "{{ working_directory }}/ubuntu-base.iso.gz" "{{ save_iso_copy_to }}"
+
+    - name: Delete working directory
+      include_tasks: delete_work_dir.yaml
+
+    - name: Eject USB device
+      ignore_errors: yes
+      command: eject /dev/{{ usb_device_name }}
+
+################################################################################
+# Final message
+################################################################################
+
+    - name: "##### USB PROVISIONER CREATED! ####"
+      debug:
+        msg: "Unplug the USB device, insert it into the target system, power it on 
+        and select the USB device as the boot target. After logging in using the 
+        provisioner credentials, run 'provision_pc' to provision the target system 
+        or just use the instance of Ubuntu running on the USB device. Note that the 
+        USB device has been ejected from this system, so if you need to reprovision 
+        the device then you must unplug it, then plug it back into this computer before 
+        executing the create_provisioner script again."

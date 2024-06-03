@@ -1,0 +1,50 @@
+---
+
+################################################################################
+# Configure components
+################################################################################
+
+  - name: Configure core components
+    include_tasks: configure_image_core.yaml
+
+################################################################################
+# Configure partitions
+################################################################################
+
+  - name: Configure the boot partition and bootloader
+    include_tasks: configure_image_boot.yaml
+
+################################################################################
+# Install software
+################################################################################
+
+  - name: Install default software
+    include_tasks: configure_image_software.yaml
+
+################################################################################
+# Configure the user account
+################################################################################
+
+  - name: Install sudo and create the user account
+    include_tasks: configure_user.yaml
+
+################################################################################
+# Configure the hostname
+################################################################################
+
+  - name: Set the hostname
+    include_tasks: configure_hostname.yaml
+
+################################################################################
+# Configure security
+################################################################################
+
+  - name: Implement additional security measures
+    include_tasks: configure_image_security.yaml
+
+################################################################################
+# Cleanup
+################################################################################
+
+  - name: Remove unneeded APT packages
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'apt -qy clean && apt -qy autoremove'

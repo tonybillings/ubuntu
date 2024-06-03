@@ -1,0 +1,77 @@
+---
+
+################################################################################
+# Install Ansible and community modules
+################################################################################
+
+  - name: Add Ansible PPA
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'add-apt-repository --yes --update ppa:ansible/ansible'
+
+  - name: Update APT after adding Ansible PPA
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get update -qy'
+
+  - name: Install Ansible and dependencies
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -qy python3 python3-pip ansible'
+
+  - name: Install Ansible community modules
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'ansible-galaxy collection install community.general'
+
+################################################################################
+# Install Go
+################################################################################
+
+  - when: golang_version is defined and golang_version | trim != ''
+    block:
+      - name: Download Go
+        get_url:
+          url: https://go.dev/dl/go{{ golang_version }}.linux-amd64.tar.gz
+          dest: "{{ working_directory }}/mnt/tmp/go{{ golang_version }}.linux-amd64.tar.gz"
+          mode: 0444
+
+      - name: Extract and install Go
+        unarchive:
+          src: "{{ working_directory }}/mnt/tmp/go{{ golang_version }}.linux-amd64.tar.gz"
+          dest: "{{ working_directory }}/mnt/usr/local"
+
+      - name: Create symbolic link to Go binary inside of /usr/local/bin
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'ln -s /usr/local/go/bin/go /usr/local/bin/go'
+
+################################################################################
+# Install OpenSSH Server
+################################################################################
+
+  - when: enable_ssh_server is defined and enable_ssh_server
+    block:
+      - name: Install SSH server
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'apt-get -qy install openssh-server'
+
+      - name: Ensure SSH server is enabled on boot
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'systemctl enable ssh'
+
+################################################################################
+# Install GUI
+################################################################################
+
+  - when: enable_gui is defined and enable_gui
+    block:
+      - name: Install GNOME (ubuntu-gnome-desktop) and GDM
+        when: gui_edition is defined and gui_edition | lower == 'full'
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -qy install gnome-shell ubuntu-gnome-desktop gdm3'
+
+      - name: Install GNOME (ubuntu-desktop-minimal) and GDM
+        when: gui_edition is not defined or gui_edition | lower != 'full'
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -qy install gnome-shell ubuntu-desktop-minimal gdm3'
+
+      - name: Set GDM as the default display manager
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'echo "gdm3 shared/default-x-display-manager select gdm3" | debconf-set-selections && dpkg-reconfigure gdm3'
+
+      - name: Set default boot target to graphical
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'systemctl set-default graphical.target'
+
+################################################################################
+# Install additional packages
+################################################################################
+
+  - name: Install packages specified in 'config.yaml'
+    when: additional_packages is defined and additional_packages | trim != ''
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -qy {{ additional_packages }}'

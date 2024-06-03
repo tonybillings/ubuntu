@@ -1,0 +1,19 @@
+---
+
+################################################################################
+# Resize the root partition on the storage device
+################################################################################
+
+  - name: Reload the partition table
+    command: partprobe /dev/{{ storage_device_name }}
+
+  - name: Resize the root partition to use all available space
+    command: parted /dev/{{ storage_device_name }} resizepart 2 {{ root_size_pct }}%
+    args:
+      stdin: "yes\n"
+
+  - name: Check the filesystem on the root partition
+    command: e2fsck -f -y /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}2
+
+  - name: Resize the filesystem on the root partition
+    command: resize2fs /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}2
