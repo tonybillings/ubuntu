@@ -84,4 +84,6 @@
 
     - name: "##### PROVISIONING COMPLETED! ####"
       debug:
-        msg: "POWER OFF THE COMPUTER AND THEN UNPLUG THE USB DRIVE BEFORE POWERING BACK ON! You can shutdown with the command 'shutdown now' or press the power button."
+        msg: "POWER OFF THE COMPUTER AND THEN UNPLUG THE USB DRIVE BEFORE 
+        POWERING BACK ON! You can shutdown with the command 'shutdown now' 
+        or press the power button."
