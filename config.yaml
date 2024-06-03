@@ -74,6 +74,7 @@ additional_packages: >
   iw htop tree ssh-askpass procps git build-essential
   cmake bluetooth bluez bluez-tools libbluetooth-dev libhdf5-dev
   libgl1-mesa-dev libglfw3-dev libfreetype6-dev
+  pkg-config libxcursor-dev libxinerama-dev libxi-dev libxxf86vm-dev
 
 # If set, will install the specified version of Go.
 golang_version: 1.22.3
