@@ -7,7 +7,7 @@
   - name: Reload the partition table
     command: partprobe /dev/{{ storage_device_name }}
 
-  - name: Resize the root partition to use all available space
+  - name: Resize the root partition to use {{ root_size_pct }}% of the remaining available space
     command: parted /dev/{{ storage_device_name }} resizepart 2 {{ root_size_pct }}%
     args:
       stdin: "yes\n"
