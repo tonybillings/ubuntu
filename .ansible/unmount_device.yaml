@@ -42,10 +42,4 @@
     lineinfile:
       path: /etc/fstab
       state: absent
-      regexp: '\/tmp\/\.create_provisioner'
-
-  - name: Ensure /etc/fstab is clean
-    lineinfile:
-      path: /etc/fstab
-      state: absent
-      regexp: '\/tmp\/\.provision_pc'
+      regexp: '\/tmp\/\.ubuntu_provisioner'

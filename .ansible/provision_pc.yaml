@@ -13,6 +13,11 @@
     - config.yaml
     - secrets.yaml
 
+  vars_prompt:
+    - name: target_storage_device_name
+      prompt: "Enter the storage device name on the target system (example: nvme0n1)"
+      private: no
+
   tasks:
 
     - block:

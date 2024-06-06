@@ -12,9 +12,6 @@ working_directory: /tmp/.ubuntu_provisioner
 provisioner_hostname: provisioner
 target_hostname: tonys-laptop
 
-# The name of the storage device on the target system.
-target_storage_device_name: nvme0n1
-
 # Maximum size of the ISO image, in megabytes, before compression.
 # The actual size will be based on the amount of data written to
 # the virtual disk used to create the image, but that amount will not

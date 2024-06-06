@@ -38,11 +38,6 @@
     fail:
       msg: "Must provide a value for target_hostname"
 
-  - name: Ensure target_storage_device_name is set
-    when: target_storage_device_name is not defined or target_storage_device_name | trim == ''
-    fail:
-      msg: "Must provide a value for target_storage_device_name"
-
   - name: Ensure provisioner_root_size_pct is set
     assert:
       that: provisioner_root_size_pct | int != None
