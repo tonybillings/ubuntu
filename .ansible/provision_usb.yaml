@@ -122,7 +122,7 @@
         - name: Configure the image
           include_tasks: configure_image.yaml
           vars:
-            device_name: "{{ loop_device_name }}"
+            storage_device_name: "{{ loop_device_name }}"
             new_hostname: "{{ provisioner_hostname }}"
             login_username: "{{ provisioner_login_username }}"
             login_password: "{{ provisioner_login_password }}"
@@ -188,23 +188,29 @@
       shell: | 
         pigz -d -c "{{ working_directory }}/ubuntu-base.iso.gz" | dd bs=16M conv=fsync oflag=direct of=/dev/{{ usb_device_name }}
 
+    - name: Reload the partition table 
+      command: partprobe /dev/{{ usb_device_name }}
+      
     - name: Resize the USB device
       include_tasks: resize_storage.yaml
       vars:
         storage_device_name: "{{ usb_device_name }}"
         root_size_pct: "{{ provisioner_root_size_pct }}"
-        partition_prefix: ""
+        partition_prefix: "{{ 'p' if usb_device_name.startswith('nvme') else '' }}"
 
-################################################################################
-# Copy the compressed ISO to /prov
-################################################################################
-
+    - name: Generate new partition UUID's and update GRUB 
+      include_tasks: update_grub.yaml
+      vars:
+        storage_device_name: "{{ usb_device_name }}"
+        partition_prefix: "{{ 'p' if usb_device_name.startswith('nvme') else '' }}"
+        
     - block:
+            
         - name: Mount the USB provisioner
           include_tasks: mount_device.yaml
           vars:
             device_name: "{{ usb_device_name }}"
-            partition_prefix: ""
+            partition_prefix: "{{ 'p' if usb_device_name.startswith('nvme') else '' }}"
 
         - name: Copy the ISO to the /prov folder
           copy:
@@ -227,10 +233,6 @@
     - name: Delete working directory
       include_tasks: delete_work_dir.yaml
 
-    - name: Eject USB device
-      ignore_errors: yes
-      command: eject /dev/{{ usb_device_name }}
-
 ################################################################################
 # Final message
 ################################################################################
@@ -240,7 +242,4 @@
         msg: "Unplug the USB device, insert it into the target system, power it on 
         and select the USB device as the boot target. After logging in using the 
         provisioner credentials, run 'provision_pc' to provision the target system 
-        or just use the instance of Ubuntu running on the USB device. Note that the 
-        USB device has been ejected from this system, so if you need to reprovision 
-        the device then you must unplug it, then plug it back into this computer before 
-        executing the create_provisioner script again."
+        or just use the instance of Ubuntu running on the USB device."

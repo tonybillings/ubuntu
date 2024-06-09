@@ -10,13 +10,14 @@ working_directory: /tmp/.ubuntu_provisioner
 
 # The hostname of the USB provisioner / target system.
 provisioner_hostname: provisioner
-target_hostname: tonys-laptop
+target_hostname: tonys-desktop
+
 
 # Maximum size of the ISO image, in megabytes, before compression.
 # The actual size will be based on the amount of data written to
 # the virtual disk used to create the image, but that amount will not
 # exceed the value specified here.
-max_image_size_mb: 10000
+max_image_size_mb: 15000
 
 # Size of the root partition, specified as a percentage of the available
 # free space remaining on the storage device after the boot partition is
@@ -24,7 +25,7 @@ max_image_size_mb: 10000
 # gigabytes, setting this parameter to 50 would result in 16 GB being
 # used for the root partition and would leave 16 GB of unused/unpartitioned
 # space on the drive.
-provisioner_root_size_pct: 50
+provisioner_root_size_pct: 100
 target_root_size_pct: 100
 
 # Ubuntu Base version to use.
@@ -36,7 +37,7 @@ kernel_version: 6.8.0-31-lowlatency
 
 # Ethernet/WiFi interface names on the target system.
 target_eth_name: enp88s0
-target_wifi_name: wlp69s0
+target_wifi_name: wlp7s0
 
 # NTP time-server to use.
 ntp_server: time.nist.gov
@@ -53,7 +54,7 @@ enable_firewall: true
 # Set to true to have OpenSSH Server installed/enabled
 # and TCP port 22 opened for inbound traffic (if UFW
 # is enabled).
-enable_ssh_server: true
+enable_ssh_server: false
 
 # Set to true to have GNOME/GDM installed and the boot
 # target set to graphical.

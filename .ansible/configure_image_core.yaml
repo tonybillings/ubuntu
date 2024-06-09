@@ -97,6 +97,13 @@
         sysctl -p /etc/sysctl.d/60-custom.conf
         exit 0
 
+  - name: Create NetworkManager configuration to disable IPv6
+    copy:
+      dest: "{{ working_directory }}/mnt/etc/NetworkManager/conf.d/10-no-ipv6.conf"
+      content: |
+        [connection]
+        ipv6.method=ignore
+
   - name: Ensure permissions are correct for /etc/rc.local
     file:
       path: "{{ working_directory }}/mnt/etc/rc.local"
@@ -138,8 +145,8 @@
 # Install storage device utilities
 ################################################################################
 
-  - name: Install parted/e2fsprogs/pigz
-    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -qy install parted e2fsprogs pigz'
+  - name: Install storage device utilities
+    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -qy install parted e2fsprogs pigz uuid-runtime gdisk mtools'
 
 ################################################################################
 # Install and configure systemd

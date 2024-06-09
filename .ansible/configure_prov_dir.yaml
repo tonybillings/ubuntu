@@ -68,9 +68,9 @@
       mode: 0700
       content:  |
         #!/bin/bash
-        cd /prov
         printf "Currently installed storage devices:\n\n"
         lsblk | grep -v ^loop | grep -v ^$'\u251C' | grep -v ^$'\u2514'
+        cd /prov
         /prov/run_playbook.sh provision_pc.yaml
         cd -
 

@@ -1,5 +1,3 @@
----
-
 ################################################################################
 # Provision the target system
 ################################################################################
@@ -55,6 +53,11 @@
 ################################################################################
 # Configure the target system
 ################################################################################
+
+        - name: Generate new partition UUID's and update GRUB
+          include_tasks: update_grub.yaml
+          vars:
+            storage_device_name: "{{ target_storage_device_name }}"
 
         - name: Mount the target system
           include_tasks: mount_device.yaml

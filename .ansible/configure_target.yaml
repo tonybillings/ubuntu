@@ -25,3 +25,19 @@
 
   - name: Set the hostname
     include_tasks: configure_hostname.yaml
+
+################################################################################
+# Ensure netplan configuration is active
+################################################################################
+
+  - name: Check if netplan config backup file exists
+    stat:
+      path: "{{ working_directory }}/mnt/etc/netplan/01-network-manager-all.yaml.dpkg-backup"
+    register: netplan_backup_file
+
+  - name: Restore netplan config that was automatically backed up
+    when: netplan_backup_file.stat.exists
+    copy:
+      src: "{{ working_directory }}/mnt/etc/netplan/01-network-manager-all.yaml.dpkg-backup"
+      dest: "{{ working_directory }}/mnt/etc/netplan/01-network-manager-all.yaml"
+      mode: 0600

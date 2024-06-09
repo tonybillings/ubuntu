@@ -3,31 +3,40 @@
 ################################################################################
 # Format the storage device
 ################################################################################
-
-  - name: Create the boot partition on the storage device
+ 
+  - name: Create the boot partition
     community.general.parted:
-      device: "/dev/{{ storage_device_name }}"
+      device: /dev/{{ storage_device_name }}
       number: 1
-      state: present
-      flags: [ boot, esp ]
-      part_type: primary
       part_start: 1MiB
-      part_end: 250MiB
+      part_end: 512MiB
+      label: gpt
+      fs_type: fat32
+      flags: [ esp ]
+      state: present
 
-  - name: Register storage device information (again)
-    community.general.parted: "device=/dev/{{ storage_device_name }} unit=MiB"
+  - name: Register storage device information
+    community.general.parted: "device=/dev/{{ storage_device_name }} unit=MiB"  
     register: storage_device_info
 
-  - name: Create the root partition on the storage device
-    community.general.parted:
-      device: "/dev/{{ storage_device_name }}"
-      number: 2
-      state: present
-      part_type: primary
-      part_start: "{{ storage_device_info.partitions[0].end }}MiB"
+  - name: Create the root partition
+    expect:
+      command: parted /dev/{{ storage_device_name }} mkpart primary ext4 "{{ storage_device_info.partitions[0].end }}MiB" "{{ root_size_pct | default('100') }}%"
+      responses:
+        '(?i)Fix/Ignore\\?': 'Fix'
+        '(?i)Partition number\\?': '2'
+        '(?i)End\\?  \[.*\]\\?': '\n'
+        '(?i)Yes/No\\?': 'Yes'
 
-  - name: Format the boot partition on the storage device
-    command: mkfs.fat -F32 /dev/{{ storage_device_name }}p1
+  - name: Format the boot partition
+    command: mkfs.fat -F32 /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}1
 
-  - name: Format the root partition on the storage device
-    command: mkfs.ext4 -F /dev/{{ storage_device_name }}p2
+  - name: Format the root partition
+    command: mkfs.ext4 -F /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}2
+
+  - name: Verify the partitions exist
+    command: lsblk /dev/{{ storage_device_name }}
+    register: partitions_check
+
+  - name: Ensure partition table is recognized
+    command: partprobe /dev/{{ storage_device_name }}

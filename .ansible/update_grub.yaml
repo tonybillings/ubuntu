@@ -1,0 +1,62 @@
+---
+
+################################################################################
+# Generate new UUIDs for the partitions and update GRUB
+################################################################################
+
+  - name: Regenerate PTUUID for the disk
+    command: sgdisk --disk-guid=$(uuidgen) /dev/{{ storage_device_name }}
+   
+  - name: Regenerate PARTUUID for the boot partition
+    command: sgdisk --partition-guid=1:$(uuidgen) /dev/{{ storage_device_name }}
+
+  - name: Regenerate PARTUUID for the root partition
+    command: sgdisk --partition-guid=2:$(uuidgen) /dev/{{ storage_device_name }}
+
+  - name: Check the filesystem on the boot partition
+    command: fsck.vfat -a /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}1
+    
+  - name: Regenerate the UUID for the boot partition filesystem
+    shell: |
+      new_uuid=$(uuidgen | tr -d '-' | cut -c1-8 | tr '[:lower:]' '[:upper:]')
+      mlabel -i /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}1 -N $new_uuid ::
+    
+  - name: Check the filesystem on the root partition
+    command: e2fsck -f -y /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}2
+    
+  - name: Regenerate the UUID for the root partition filesystem
+    shell: tune2fs /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}2 -U $(uuidgen)
+
+  - name: Get new boot partition UUID
+    command: blkid -s UUID -o value /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}1
+    register: new_boot_uuid
+
+  - name: Get new root partition UUID
+    command: blkid -s UUID -o value /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}2
+    register: new_root_uuid
+
+  - block:
+  
+      - name: Mount the target system
+        include_tasks: mount_device.yaml
+        vars:
+          device_name: "{{ storage_device_name }}"
+            
+      - name: Configure /etc/fstab with new UUIDs
+        copy:
+          dest: "{{ working_directory }}/mnt/etc/fstab"
+          content: |
+            UUID={{ new_root_uuid.stdout }} / ext4 defaults 1 1
+            UUID={{ new_boot_uuid.stdout }} /boot/efi vfat umask=0077 defaults 0 1
+            /swapfile none swap sw 0 0
+      
+      - name: Install GRUB
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'grub-install --target=x86_64-efi --efi-directory=/boot/efi --boot-directory=/boot /dev/{{ storage_device_name }}'
+
+      - name: Update GRUB configuration in chroot environment
+        command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'update-grub'
+      
+    always:
+  
+      - name: Unmount the storage device
+        include_tasks: unmount_device.yaml

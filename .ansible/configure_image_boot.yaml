@@ -1,7 +1,7 @@
 ---
 
 ################################################################################
-# Configure the boot drive
+# Configure the boot partition
 ################################################################################
 
   - name: Install utility packages needed for configuring boot partition
@@ -9,9 +9,6 @@
 
   - name: Move boot files from root partition to boot partition
     command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'rsync -r --no-links --info=skip0 /boot/ /boot/efi/.'
-
-  - name: Install GRUB
-    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'grub-install --target=x86_64-efi --efi-directory=/boot/efi --boot-directory=/boot /dev/{{ device_name }}'
 
   - name: Edit GRUB configuration parameters
     blockinfile:
@@ -22,35 +19,16 @@
         GRUB_DISABLE_OS_PROBER=true
         GRUB_HIDDEN_TIMEOUT_QUIET=true
 
-  - name: Create GRUB config file
-    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'update-grub'
-
-  - name: Copy the updated GRUB config file from the root partition to the boot partition
-    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'rsync /boot/grub/grub.cfg /boot/efi/grub/grub.cfg'
-
-  - name: Set dev_rel_path variable
-    set_fact:
-      dev_rel_path: "../{{ device_name }}"
-
-  - name: Get boot partition UUID
-    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'ls -l /dev/disk/by-uuid | grep {{ dev_rel_path }}p1 | awk "{print \$9}"'
-    register: get_boot_part_uuid_result
-
-  - name: Set boot_part_uuid variable
-    set_fact:
-      boot_part_uuid: "{{ get_boot_part_uuid_result.stdout }}"
-
-  - name: Get root partition UUID
-    command: chroot "{{ working_directory }}/mnt" /bin/bash -c 'ls -l /dev/disk/by-uuid | grep {{ dev_rel_path }}p2 | awk "{print \$9}"'
-    register: get_root_part_uuid_result
-
-  - name: Set root_part_uuid variable
-    set_fact:
-      root_part_uuid: "{{ get_root_part_uuid_result.stdout }}"
-
-  - name: Configure /etc/fstab
-    copy:
-      dest: "{{ working_directory }}/mnt/etc/fstab"
-      content: |
-        UUID={{ root_part_uuid }} / ext4 defaults 1 1
-        UUID={{ boot_part_uuid }} /boot/efi vfat umask=0077 defaults 0 1
+  - name: Unmount the image
+    include_tasks: unmount_device.yaml
+    
+  - name: Generate new partition UUID's and update GRUB 
+    include_tasks: update_grub.yaml
+    vars:
+      partition_prefix: "p"
+      
+  - name: Remount the image
+    include_tasks: mount_device.yaml
+    vars:
+      device_name: "{{ storage_device_name }}"
+      partition_prefix: "p"

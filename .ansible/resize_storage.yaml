@@ -4,13 +4,15 @@
 # Resize the root partition on the storage device
 ################################################################################
 
+  - name: Fix the root partition (if necessary)
+    ignore_errors: yes
+    shell: echo -e "resizepart\nFix\nquit\n" | sudo parted /dev/{{ storage_device_name }} ---pretend-input-tty
+   
+  - name: Resize the root partition
+    shell: echo -e "resizepart\n2\n{{ root_size_pct | default('100') }}%\nquit\n" | sudo parted /dev/{{ storage_device_name }} ---pretend-input-tty
+
   - name: Reload the partition table
     command: partprobe /dev/{{ storage_device_name }}
-
-  - name: Resize the root partition to use {{ root_size_pct }}% of the remaining available space
-    command: parted /dev/{{ storage_device_name }} resizepart 2 {{ root_size_pct }}%
-    args:
-      stdin: "yes\n"
 
   - name: Check the filesystem on the root partition
     command: e2fsck -f -y /dev/{{ storage_device_name }}{{ partition_prefix | default('p') }}2

@@ -19,7 +19,7 @@ check_package() {
 }
 
 # Ensure required packages are installed.
-packages=("util-linux" "coreutils" "pigz")
+packages=("util-linux" "coreutils" "pigz" "uuid-runtime" "gdisk" "mtools" "e2fsprogs")
 for package in "${packages[@]}"; do
   check_package $package
 done
